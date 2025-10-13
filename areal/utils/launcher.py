@@ -113,6 +113,7 @@ def wait_llm_server_addrs(
     start = time.perf_counter()
     while True:
         rollout_addrs = name_resolve.get_subtree(name)
+        print(f"[wht debug] name_resolve is {name_resolve}, rollout_addrs is {rollout_addrs}")
         if len(rollout_addrs) >= n_rollout_servers:
             logger.info(
                 f"Found {len(rollout_addrs)} rollout servers: {', '.join(rollout_addrs)}"
