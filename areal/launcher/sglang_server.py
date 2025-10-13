@@ -260,6 +260,8 @@ def launch_sglang_server(argv):
 
 def main(argv):
     try:
+        print("[wht debug] launch sglang server")
+        logger.info("[wht debug] Launch SGLang server")
         launch_sglang_server(argv)
     finally:
         kill_process_tree(os.getpid())
