@@ -237,23 +237,16 @@ class SGLangServerWrapper:
 
 def launch_sglang_server(argv):
     config, _ = parse_cli_args(argv)
-    logger.info(f"[wht debug] parse_cli_args")
     config.sglang = to_structured_cfg(config.sglang, SGLangConfig)
-    logger.info(f"[wht debug] to_structured_cfg SGLangConfig")
     config.cluster = to_structured_cfg(config.cluster, ClusterSpecConfig)
-    logger.info(f"[wht debug] to_structured_cfg ClusterSpecConfig")
     config.cluster.name_resolve = to_structured_cfg(
         config.cluster.name_resolve, NameResolveConfig
     )
-    logger.info(f"[wht debug] to_structured_cfg NameResolveConfig")
     name_resolve.reconfigure(config.cluster.name_resolve)
-    logger.info(f"[wht debug] name_resolve.reconfigure")
 
     allocation_mode = config.allocation_mode
     allocation_mode = AllocationMode.from_str(allocation_mode)
-    logger.info(f"[wht debug] AllocationMode.from_str {allocation_mode}")
     assert allocation_mode.gen_backend == "sglang"
-    logger.info(f"[wht debug] assert allocation_mode.gen_backend == sglang")
 
     sglang_server = SGLangServerWrapper(
         config.experiment_name,
@@ -262,9 +255,7 @@ def launch_sglang_server(argv):
         allocation_mode,
         n_gpus_per_node=config.cluster.n_gpus_per_node,
     )
-    logger.info(f"[wht debug] init SGLangServerWrapper")
     sglang_server.run()
-    logger.info(f"[wht debug] sglang_server.run() finished")
 
 
 def main(argv):
