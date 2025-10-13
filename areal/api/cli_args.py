@@ -1143,19 +1143,27 @@ def parse_cli_args(argv: List[str]):
     # which should be ignored by the argument parser.
     if argv and argv[0].endswith(".py"):
         argv = argv[1:]
+    print(f"[wht debug] {argv=}")
     args, overrides = parser.parse_known_args(argv)
+    print(f"[wht debug] parse_known_args")
     # Initialize hydra config
     config_file = Path(args.config).absolute()
+    print(f"[wht debug] {config_file=}")
     assert config_file.exists(), f"Config file {config_file} does not exist."
+    print(f"[wht debug] {config_file} exists")
     # hydra only recognize relative paths
     relpath = Path(os.path.relpath(str(config_file), Path(__file__).parent.absolute()))
+    print(f"[wht debug] {relpath=}")
     if GlobalHydra.instance().is_initialized():
         GlobalHydra.instance().clear()
+    print(f"[wht debug] GlobalHydra.instance().clear()")
     hydra_init(config_path=str(relpath.parent), job_name="app", version_base=None)
+    print(f"[wht debug] hydra_init")
     cfg = hydra_compose(
         config_name=str(relpath.name).split(".yaml")[0],
         overrides=overrides,
     )
+    print(f"[wht debug] hydra_compose")
     return cfg, config_file
 
 
