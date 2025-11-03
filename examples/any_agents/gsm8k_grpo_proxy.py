@@ -50,15 +50,15 @@ def sync_run_task(
     data, proxy_addr, run_agent_return_reward: Callable[[Any], Awaitable[float]]
 ):
     async def run_task(data, proxy_addr, run_agent_return_reward: Callable):
-        try:
-            async with ProxySession(base_url=proxy_addr) as session:
-                session_id = session.session_id
+        async with ProxySession(base_url=proxy_addr) as session:
+            session_id = session.session_id
+            try:
                 reward = await run_agent_return_reward(data)
-                await session.set_reward(reward)
-        except Exception as e:
-            logger.error(f"Error in sync_run_task: {e}")
-            error_message = f"API call failed. Exception: {e}"
-            return error_message, None, 0.0
+            except Exception as e:
+                logger.warning(f"Error in sync_run_task: {e}")
+                reward = 0.0
+
+            await session.set_reward(reward)
 
         return None, session_id, reward
 
