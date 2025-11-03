@@ -7,6 +7,8 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
 
+import aiofiles
+import aiofiles.os
 import torch.distributed as dist
 
 from areal.api.alloc_mode import AllocationMode
@@ -78,6 +80,7 @@ class ProxyRLVRWorkflow(RolloutWorkflow):
         proxy_server: ProxyServer,
         run_agent_return_reward: Callable[[Any], Awaitable[float]],
         process_pool_executor: ProcessPoolExecutor = None,
+        dump_dir: str | None = None,
         rollout_stat_scope: str = "rollout",
     ):
         self.proxy_server = proxy_server
@@ -87,6 +90,7 @@ class ProxyRLVRWorkflow(RolloutWorkflow):
         self.process_pool_executor = process_pool_executor
         self.gconfig = gconfig
         self.run_agent_return_reward = run_agent_return_reward
+        self.dump_dir = dump_dir
 
     async def arun_episode(self, engine: InferenceEngine, data):
         futures = [
@@ -111,7 +115,35 @@ class ProxyRLVRWorkflow(RolloutWorkflow):
         for reward in rewards:
             stats_tracker.get(self.rollout_stat_scope).scalar(reward=reward)
 
-        return await self.proxy_server.get_completions(session_ids=session_ids)
+        completions = await self.proxy_server.get_completions(session_ids=session_ids)
+
+        if self.dump_dir is not None:
+            for session_id, completion in completions.items():
+                version = completion.model_response.output_versions[-1]
+
+                dump_path = os.path.join(self.dump_dir, str(version))
+                await aiofiles.os.makedirs(dump_path, exist_ok=True)
+                # Get the unique identifier for this prompt
+                qid = None
+                for key in ["query_id", "id", "qid"]:
+                    qid = data.get(key, None)
+                    if qid is not None:
+                        break
+                qid = qid + f"_{session_id}" if qid is not None else session_id
+
+                # Dump rollout to file
+                file_path = os.path.join(dump_path, f"{qid}.txt")
+                async with aiofiles.open(file_path, "a") as f:
+                    info = "\n".join(
+                        [
+                            f"reward is: {completion.reward}.",
+                            f"messages is: {completion.get_current_data_for_logging()}.",
+                            f"parent is: {completion.get_parent_data_for_logging()}.",
+                        ]
+                    )
+                    await f.write(info + "\n")
+
+        return completions
 
 
 @dataclass
@@ -228,6 +260,9 @@ def main(args):
         proxy_server=proxy_server,
         run_agent_return_reward=run_agent_return_reward,
         process_pool_executor=process_pool_executor,
+        dump_dir=os.path.join(
+            StatsLogger.get_log_path(config.stats_logger), "generated"
+        ),
     )
     eval_workflow = RLVRWorkflow(
         reward_fn=gsm8k_reward_fn,
