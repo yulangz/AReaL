@@ -4,6 +4,7 @@ import sys
 from concurrent.futures import ProcessPoolExecutor
 from copy import deepcopy
 from dataclasses import dataclass, field
+from typing import Callable, Awaitable, Any
 
 import torch.distributed as dist
 
@@ -32,10 +33,7 @@ from areal.utils.recover import RecoverHandler
 from areal.utils.saver import Saver
 from areal.utils.stats_logger import StatsLogger
 from areal.workflow.rlvr import RLVRWorkflow
-
-from .agent.math.math_agent import run_agent_return_reward
-
-# from .agent.math.multi_agent_math_workflow import run_agent_return_reward
+from areal.utils.importing import dynamic_import
 
 
 logger = logging.getLogger("GSM8K GRPO Proxy Example")
@@ -48,8 +46,8 @@ def gsm8k_reward_fn(prompt, completions, prompt_ids, completion_ids, answer, **k
 
 
 # pickle used by ProcessPoolExecutor can not serialize a local function, so we need a global function
-def sync_run_task(data, proxy_addr):
-    async def run_task(data, proxy_addr):
+def sync_run_task(data, proxy_addr, run_agent_return_reward: Callable[[Any], Awaitable[float]]):
+    async def run_task(data, proxy_addr, run_agent_return_reward: Callable):
         try:
             async with ProxySession(base_url=proxy_addr) as session:
                 session_id = session.session_id
@@ -62,7 +60,7 @@ def sync_run_task(data, proxy_addr):
 
         return None, session_id, reward
 
-    return asyncio.run(run_task(data=data, proxy_addr=proxy_addr))
+    return asyncio.run(run_task(data=data, proxy_addr=proxy_addr, run_agent_return_reward=run_agent_return_reward))
 
 
 class ProxyRLVRWorkflow(RolloutWorkflow):
@@ -70,6 +68,7 @@ class ProxyRLVRWorkflow(RolloutWorkflow):
         self,
         gconfig: GenerationHyperparameters,
         proxy_server: ProxyServer,
+        run_agent_return_reward: Callable[[Any], Awaitable[float]],
         process_pool_executor: ProcessPoolExecutor = None,
         rollout_stat_scope: str = "rollout",
     ):
@@ -79,6 +78,7 @@ class ProxyRLVRWorkflow(RolloutWorkflow):
         self.rollout_stat_scope = rollout_stat_scope
         self.process_pool_executor = process_pool_executor
         self.gconfig = gconfig
+        self.run_agent_return_reward = run_agent_return_reward
 
     async def arun_episode(self, engine: InferenceEngine, data):
         futures = [
@@ -114,6 +114,11 @@ class ProxyAgentConfig(GRPOConfig):
     agent_process_pool_size: int = field(
         default=128,
         metadata={"help": "Number of parallel processes for running agents."},
+    )
+
+    agent_module_path: str = field(
+        default="examples.any_agents.agent.math.math_agent",
+        metadata={"help": "Module path for the agent definition."},
     )
 
 
@@ -203,10 +208,16 @@ def main(args):
         max_workers=config.agent_process_pool_size
     )
 
+    run_agent_return_reward = dynamic_import(
+        module_path=config.agent_module_path,
+        function_name="run_agent_return_reward",
+    )
+
     workflow = ProxyRLVRWorkflow(
         gconfig=config.gconfig,
         rollout_stat_scope="rollout",
         proxy_server=proxy_server,
+        run_agent_return_reward=run_agent_return_reward,
         process_pool_executor=process_pool_executor,
     )
     eval_workflow = RLVRWorkflow(
