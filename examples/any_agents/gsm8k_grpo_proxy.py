@@ -139,6 +139,7 @@ class ProxyRLVRWorkflow(RolloutWorkflow):
                             f"reward is: {completion.reward}.",
                             f"messages is: {completion.get_current_data_for_logging()}.",
                             f"parent is: {completion.get_parent_data_for_logging()}.",
+                            f"completion is: {completion}"
                         ]
                     )
                     await f.write(info + "\n")
