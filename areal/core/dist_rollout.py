@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import torch
 import torch.distributed as dist
@@ -20,13 +21,13 @@ from areal.utils.datapack import ffd_allocate
 
 @dataclass
 class RedistributedData:
-    all_data: List[Dict[str, Any]]
-    data: Dict[str, Any]
+    all_data: list[dict[str, Any]]
+    data: dict[str, Any]
     rank: int
-    group_indices: List[List[int]]
+    group_indices: list[list[int]]
 
 
-def _slice_tensor_dict(data: Dict[str, Any], start: int, end: int) -> Dict[str, Any]:
+def _slice_tensor_dict(data: dict[str, Any], start: int, end: int) -> dict[str, Any]:
     """Slices tensors in a dictionary along the first dimension."""
     sliced_data = {}
     batch_size = -1
@@ -41,7 +42,7 @@ def _slice_tensor_dict(data: Dict[str, Any], start: int, end: int) -> Dict[str, 
 
 
 def redistribute(
-    data: Dict[str, Any], granularity: int = 1, group=None
+    data: dict[str, Any], granularity: int = 1, group=None
 ) -> RedistributedData:
     """Redistribute a batch across a process group.
 
@@ -56,7 +57,9 @@ def redistribute(
     all_data = []
     for d in all_gathered:
         bs = get_batch_size(d)
-        assert bs % granularity == 0, f"Batch size {bs} not divisible by granularity {granularity}"
+        assert bs % granularity == 0, (
+            f"Batch size {bs} not divisible by granularity {granularity}"
+        )
         all_data += [
             _slice_tensor_dict(d, i, i + granularity) for i in range(0, bs, granularity)
         ]
@@ -92,15 +95,14 @@ def redistribute(
 
 class DistRolloutCoordinator:
     def __init__(self, rollout_engine: InferenceEngine, train_engine: TrainEngine):
-
         self.rollout_engine = rollout_engine
         self.train_engine = train_engine
 
     def _broadcast_and_redistribute_batch(
         self,
-        batch: Dict[str, Any] | None,
+        batch: dict[str, Any] | None,
         granularity: int = 1,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Broadcast and redistribute batch across distributed workers.
 
         This helper encapsulates:
@@ -123,13 +125,13 @@ class DistRolloutCoordinator:
         Dict[str, Any]
             Redistributed and broadcast batch available on all ranks
         """
-        # if batch is not None:
-        #     redist = redistribute(
-        #         batch,
-        #         granularity=granularity,
-        #         group=self.train_engine.data_parallel_group,
-        #     )
-        #     batch = redist.data
+        if batch is not None:
+            redist = redistribute(
+                batch,
+                granularity=granularity,
+                group=self.train_engine.data_parallel_group,
+            )
+            batch = redist.data
 
         dist.barrier(device_ids=[current_platform.current_device()])
         current_platform.synchronize()
@@ -147,12 +149,12 @@ class DistRolloutCoordinator:
 
     def rollout_batch(
         self,
-        data: List[Dict[str, Any]],
+        data: list[dict[str, Any]],
         granularity: int = 1,
-        workflow: Optional[RolloutWorkflow] = None,
-        workflow_builder: Optional[Callable] = None,
+        workflow: RolloutWorkflow | None = None,
+        workflow_builder: Callable | None = None,
         should_accept: Callable | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate rollout batch with distributed coordination (synchronous).
 
         This method orchestrates distributed rollout generation:
@@ -206,10 +208,10 @@ class DistRolloutCoordinator:
         self,
         dataloader: StatefulDataLoader,
         granularity: int = 1,
-        workflow: Optional[RolloutWorkflow] = None,
-        workflow_builder: Optional[Callable] = None,
+        workflow: RolloutWorkflow | None = None,
+        workflow_builder: Callable | None = None,
         should_accept: Callable | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Prepare async rollout batch with distributed coordination.
 
         Similar to rollout_batch but uses prepare_batch for async training,

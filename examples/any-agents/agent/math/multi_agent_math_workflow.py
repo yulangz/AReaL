@@ -1,25 +1,24 @@
-import asyncio
-import json
+from typing import Any
 
 from agents import Agent as OpenAIAgent
 from agents import (
+    ModelSettings,
     RunConfig,
     SQLiteSession,
+    handoff,
     set_default_openai_api,
 )
-from agents import Agent as OpenAIAgent
-from agents import ModelSettings, OpenAIProvider, RunConfig, SQLiteSession, handoff
 from agents import Runner as OpenAIRunner
 from agents.extensions.handoff_prompt import RECOMMENDED_PROMPT_PREFIX
-from typing import Any
-from agents import Runner as OpenAIRunner
 
 set_default_openai_api("chat_completions")
+
 
 def gsm8k_reward_fn(result, answer):
     from areal.reward.math_parser import process_results
 
     return int(process_results(result, answer)[0])
+
 
 class MultiAgentMathAgent:
     def __init__(
@@ -156,9 +155,7 @@ class MultiAgentMathAgent:
             result = await OpenAIRunner.run(
                 agent, input=content, session=session, run_config=run_config
             )
-            reward = self.reward_fn(
-                result=result.final_output, answer=data["answer"]
-            )
+            reward = self.reward_fn(result=result.final_output, answer=data["answer"])
 
             if reward == 1:
                 break
@@ -181,7 +178,8 @@ class MultiAgentMathAgent:
                 Please provide a final, carefully verified solution."""
 
         return reward
-    
+
+
 async def run_agent_return_reward(data: Any) -> float:
     agent = MultiAgentMathAgent()
     result = await agent.run_agent(data)

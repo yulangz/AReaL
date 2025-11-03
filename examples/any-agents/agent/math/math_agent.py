@@ -1,14 +1,13 @@
 import asyncio
-import json
+from typing import Any
 
 from agents import Agent as OpenAIAgent
 from agents import (
-    RunConfig,
     ModelSettings,
+    RunConfig,
     SQLiteSession,
     set_default_openai_api,
 )
-from typing import Any
 from agents import Runner as OpenAIRunner
 
 set_default_openai_api("chat_completions")
@@ -20,7 +19,7 @@ agent = OpenAIAgent(
 )
 
 
-######### run agent 
+######### run agent
 async def run_agent(data):
     content = data["messages"][-1]["content"]
 
@@ -30,7 +29,7 @@ async def run_agent(data):
             temperature=1.0,
             top_p=1.0,
             max_tokens=8192,
-        )
+        ),
     )
     session = SQLiteSession("math")
 
@@ -55,4 +54,8 @@ async def run_agent_return_reward(data: Any) -> float:
 
 
 if __name__ == "__main__":
-    asyncio.run(run_agent_return_reward({"messages": [{"role": "user", "content": "What is 2+2?"}], "answer": "4"}))
+    asyncio.run(
+        run_agent_return_reward(
+            {"messages": [{"role": "user", "content": "What is 2+2?"}], "answer": "4"}
+        )
+    )
