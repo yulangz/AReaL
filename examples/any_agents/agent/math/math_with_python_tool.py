@@ -94,8 +94,8 @@ agent = Agent(
     name="RLVR Math with Code Interpreter",
     tools=[
         run_python_code,
-        list_python_environments,
-        install_python_package,
+        # list_python_environments,
+        # install_python_package,
     ]
 )
 
