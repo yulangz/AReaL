@@ -86,6 +86,7 @@ class ProxyRLVRWorkflow(RolloutWorkflow):
                 sync_run_task,
                 data,
                 f"{self.proxy_server.public_addr}/{self.api_version}",
+                self.run_agent_return_reward
             )
             for _ in range(self.n_samples)
         ]
