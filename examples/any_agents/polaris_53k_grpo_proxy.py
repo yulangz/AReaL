@@ -6,6 +6,8 @@ from concurrent.futures import ProcessPoolExecutor
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
+from datasets import load_dataset
+
 
 import aiofiles
 import aiofiles.os
@@ -178,24 +180,24 @@ def main(args):
     actor.create_process_group(parallel_strategy=parallel_strategy)
 
     # Create dataset and dataloaders
-    train_dataset = get_custom_dataset(
-        split="train", dataset_config=config.train_dataset, tokenizer=tokenizer
-    )
-    valid_dataset = get_custom_dataset(
-        split="test", dataset_config=config.valid_dataset, tokenizer=tokenizer
-    )
+    dataset = load_dataset(path=config.train_dataset, split="train")
 
+    def process(sample):
+        messages = [
+            {
+                "role": "user",
+                "content": sample["problem"]
+                + "\nPlease put your final answer within \\boxed{}.",
+            }
+        ]
+        return {"messages": messages}
+
+    train_dataset = dataset.map(process).remove_columns(["problem"])
     train_dataloader = create_dataloader(
         train_dataset,
         rank=actor.data_parallel_rank,
         world_size=actor.data_parallel_world_size,
         dataset_config=config.train_dataset,
-    )
-    valid_dataloader = create_dataloader(
-        valid_dataset,
-        rank=actor.data_parallel_rank,
-        world_size=actor.data_parallel_world_size,
-        dataset_config=config.valid_dataset,
     )
     ft_spec = FinetuneSpec(
         total_train_epochs=config.total_train_epochs,
@@ -260,16 +262,6 @@ def main(args):
         process_pool_executor=process_pool_executor,
         dump_dir=os.path.join(
             StatsLogger.get_log_path(config.stats_logger), "generated"
-        ),
-    )
-    eval_workflow = RLVRWorkflow(
-        reward_fn=gsm8k_reward_fn,
-        gconfig=config.gconfig.new(temperature=0.6),
-        tokenizer=tokenizer,
-        enable_thinking=False,
-        rollout_stat_scope="eval-rollout",
-        dump_dir=os.path.join(
-            StatsLogger.get_log_path(config.stats_logger), "generated-eval"
         ),
     )
 
@@ -370,29 +362,6 @@ def main(args):
                 stats_logger,
                 train_dataloader,
                 tokenizer=tokenizer,
-            )
-
-        dist.barrier(device_ids=[actor.device.index])
-        current_platform.synchronize()
-
-        with stats_tracker.record_timing("eval"):
-
-            def evaluate_fn():
-                if actor.is_data_parallel_head():
-                    cnt = 0
-                    for data in valid_dataloader:
-                        for item in data:
-                            eval_rollout.submit(item, eval_workflow)
-                            cnt += 1
-                    eval_rollout.wait(cnt, timeout=None)
-                dist.barrier(device_ids=[actor.device.index])
-                current_platform.synchronize()
-
-            evaluator.evaluate(
-                evaluate_fn,
-                epoch,
-                step,
-                global_step,
             )
 
         dist.barrier(device_ids=[actor.device.index])
