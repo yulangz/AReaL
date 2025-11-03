@@ -1,10 +1,11 @@
 import asyncio
 import os
 import sys
+from collections.abc import Awaitable, Callable
 from concurrent.futures import ProcessPoolExecutor
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Callable, Awaitable, Any
+from typing import Any
 
 import torch.distributed as dist
 
@@ -28,13 +29,12 @@ from areal.utils.dataloader import create_dataloader
 from areal.utils.device import log_gpu_stats
 from areal.utils.evaluator import Evaluator
 from areal.utils.hf_utils import load_hf_tokenizer
+from areal.utils.importing import dynamic_import
 from areal.utils.network import find_free_ports
 from areal.utils.recover import RecoverHandler
 from areal.utils.saver import Saver
 from areal.utils.stats_logger import StatsLogger
 from areal.workflow.rlvr import RLVRWorkflow
-from areal.utils.importing import dynamic_import
-
 
 logger = logging.getLogger("GSM8K GRPO Proxy Example")
 
@@ -46,7 +46,9 @@ def gsm8k_reward_fn(prompt, completions, prompt_ids, completion_ids, answer, **k
 
 
 # pickle used by ProcessPoolExecutor can not serialize a local function, so we need a global function
-def sync_run_task(data, proxy_addr, run_agent_return_reward: Callable[[Any], Awaitable[float]]):
+def sync_run_task(
+    data, proxy_addr, run_agent_return_reward: Callable[[Any], Awaitable[float]]
+):
     async def run_task(data, proxy_addr, run_agent_return_reward: Callable):
         try:
             async with ProxySession(base_url=proxy_addr) as session:
@@ -60,7 +62,13 @@ def sync_run_task(data, proxy_addr, run_agent_return_reward: Callable[[Any], Awa
 
         return None, session_id, reward
 
-    return asyncio.run(run_task(data=data, proxy_addr=proxy_addr, run_agent_return_reward=run_agent_return_reward))
+    return asyncio.run(
+        run_task(
+            data=data,
+            proxy_addr=proxy_addr,
+            run_agent_return_reward=run_agent_return_reward,
+        )
+    )
 
 
 class ProxyRLVRWorkflow(RolloutWorkflow):
@@ -86,7 +94,7 @@ class ProxyRLVRWorkflow(RolloutWorkflow):
                 sync_run_task,
                 data,
                 f"{self.proxy_server.public_addr}/{self.api_version}",
-                self.run_agent_return_reward
+                self.run_agent_return_reward,
             )
             for _ in range(self.n_samples)
         ]
