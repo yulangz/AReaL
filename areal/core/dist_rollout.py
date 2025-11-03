@@ -125,13 +125,16 @@ class DistRolloutCoordinator:
         Dict[str, Any]
             Redistributed and broadcast batch available on all ranks
         """
-        if batch is not None:
-            redist = redistribute(
-                batch,
-                granularity=granularity,
-                group=self.train_engine.data_parallel_group,
-            )
-            batch = redist.data
+        # TODO: in agent async training, some tasks are slow or failed, and always encounter the following error
+        #   AssertionError: Batch size 365 not divisible by granularity 4
+        # comment this code temporarily
+        # if batch is not None:
+        #     redist = redistribute(
+        #         batch,
+        #         granularity=granularity,
+        #         group=self.train_engine.data_parallel_group,
+        #     )
+        #     batch = redist.data
 
         dist.barrier(device_ids=[current_platform.current_device()])
         current_platform.synchronize()
